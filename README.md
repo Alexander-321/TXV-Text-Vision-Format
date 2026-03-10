@@ -123,20 +123,6 @@ The short version:
 
 ---
 
-## Suggested repo structure
-
-```
-txv/
-├── README.md
-├── TXV_SPEC.md
-├── ascii-cam.html
-├── txv-player.html
-├── txv-converter.html
-└── txv-convert.py
-```
-
----
-
 ## License
 
 The TXV format and all reference tools are released into the public domain.
