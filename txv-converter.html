@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TXV CONVERTER</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    color: #00ff41;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+  }
+
+  /* ── Drop zone ── */
+  #screen-drop {
+    width: 100%; max-width: 640px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 20px;
+    padding: 40px 20px;
+  }
+
+  #logo {
+    font-size: 11px; letter-spacing: 0.3em; color: #1a4a1a;
+    margin-bottom: 4px;
+  }
+  #title {
+    font-size: 26px; letter-spacing: 0.4em;
+    color: #00ff41; text-shadow: 0 0 20px #00ff41;
+  }
+  #sub { font-size: 10px; color: #2a5a2a; letter-spacing: 0.2em; }
+
+  #drop-box {
+    width: 100%;
+    border: 1px dashed #1a4a1a;
+    border-radius: 4px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 11px; color: #2a5a2a; letter-spacing: 0.12em; line-height: 2;
+  }
+  #drop-box:hover, #drop-box.over {
+    border-color: #00ff41; color: #00ff41;
+    background: rgba(0,255,65,0.03);
+    box-shadow: 0 0 30px rgba(0,255,65,0.08);
+  }
+  #drop-icon { font-size: 36px; display: block; margin-bottom: 12px; opacity: 0.5; }
+  #file-input { display: none; }
+
+  /* ── Settings panel ── */
+  #screen-settings {
+    display: none;
+    width: 100%; max-width: 640px;
+    padding: 32px 24px;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .panel-title {
+    font-size: 9px; letter-spacing: 0.3em;
+    color: #1a4a1a; text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  #file-info {
+    font-size: 11px; color: #555; letter-spacing: 0.08em;
+    margin-bottom: 24px; line-height: 1.8;
+  }
+  #file-info span { color: #00ff41; }
+
+  .setting {
+    display: flex; align-items: center;
+    gap: 12px; margin-bottom: 14px;
+  }
+  .setting label {
+    font-size: 10px; color: #666;
+    letter-spacing: 0.1em; width: 100px; flex-shrink: 0;
+  }
+  .setting-val {
+    font-size: 10px; color: #00ff41;
+    min-width: 40px; text-align: right;
+  }
+  input[type=range] {
+    -webkit-appearance: none; flex: 1; height: 2px;
+    background: #1a3a1a; outline: none; border-radius: 2px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 10px; height: 10px;
+    border-radius: 50%; background: #00ff41; cursor: pointer;
+  }
+
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .modebt {
+    background: none; border: 1px solid #1a3a1a; color: #555;
+    padding: 4px 12px; font-family: 'Courier New', monospace;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; border-radius: 2px; transition: all 0.15s;
+  }
+  .modebt.active {
+    border-color: #00ff41; color: #00ff41;
+    background: rgba(0,255,65,0.06);
+  }
+
+  #divider {
+    height: 1px; background: #0d1a0d;
+    margin: 20px 0;
+  }
+
+  #btn-convert {
+    width: 100%;
+    background: none; border: 1px solid #00ff41; color: #00ff41;
+    padding: 14px; font-family: 'Courier New', monospace;
+    font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase;
+    cursor: pointer; border-radius: 2px;
+    box-shadow: 0 0 20px rgba(0,255,65,0.1);
+    transition: all 0.2s; margin-top: 8px;
+  }
+  #btn-convert:hover { background: rgba(0,255,65,0.06); box-shadow: 0 0 30px rgba(0,255,65,0.2); }
+  #btn-convert:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  #btn-back-s {
+    background: none; border: none; color: #2a4a2a;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    letter-spacing: 0.1em; cursor: pointer; margin-top: 10px;
+    align-self: flex-start;
+  }
+  #btn-back-s:hover { color: #00ff41; }
+
+  /* ── Progress screen ── */
+  #screen-progress {
+    display: none;
+    width: 100%; max-width: 640px;
+    padding: 40px 24px;
+    flex-direction: column;
+    align-items: center; gap: 20px;
+  }
+
+  #prog-title { font-size: 13px; letter-spacing: 0.3em; }
+  #prog-sub   { font-size: 10px; color: #555; letter-spacing: 0.1em; }
+
+  #prog-bar-wrap {
+    width: 100%; height: 2px;
+    background: #0d1a0d; border-radius: 2px; overflow: hidden;
+  }
+  #prog-bar {
+    height: 100%; width: 0%;
+    background: #00ff41;
+    box-shadow: 0 0 8px #00ff41;
+    transition: width 0.1s;
+  }
+
+  #prog-stats {
+    font-size: 10px; color: #2a5a2a;
+    letter-spacing: 0.1em; text-align: center; line-height: 2;
+  }
+
+  /* Live preview */
+  #preview-wrap {
+    width: 100%;
+    border: 1px solid #0d1a0d;
+    border-radius: 2px;
+    overflow: hidden;
+    background: #000;
+    max-height: 260px;
+    display: flex; align-items: flex-start; justify-content: center;
+  }
+  #preview-pre {
+    font-family: 'Courier New', monospace;
+    font-weight: bold; line-height: 1;
+    letter-spacing: 0; white-space: pre;
+    display: block; pointer-events: none;
+  }
+
+  #btn-cancel {
+    background: none; border: none; color: #2a2a2a;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    letter-spacing: 0.1em; cursor: pointer;
+  }
+  #btn-cancel:hover { color: #ff4444; }
+
+  /* ── Done screen ── */
+  #screen-done {
+    display: none;
+    width: 100%; max-width: 640px;
+    padding: 40px 24px;
+    flex-direction: column;
+    align-items: center; gap: 16px;
+  }
+  #done-icon { font-size: 40px; opacity: 0.7; }
+  #done-title { font-size: 14px; letter-spacing: 0.3em; }
+  #done-stats { font-size: 10px; color: #2a5a2a; letter-spacing: 0.1em; line-height: 2; text-align: center; }
+
+  #btn-dl {
+    width: 100%;
+    background: none; border: 1px solid #00ff41; color: #00ff41;
+    padding: 14px; font-family: 'Courier New', monospace;
+    font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase;
+    cursor: pointer; border-radius: 2px;
+    box-shadow: 0 0 20px rgba(0,255,65,0.1); transition: all 0.2s;
+  }
+  #btn-dl:hover { background: rgba(0,255,65,0.06); }
+
+  #btn-again {
+    background: none; border: none; color: #2a4a2a;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    letter-spacing: 0.1em; cursor: pointer;
+  }
+  #btn-again:hover { color: #00ff41; }
+
+  #scanline {
+    position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom, transparent 0px, transparent 2px,
+      rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+    );
+    z-index: 5;
+  }
+</style>
+</head>
+<body>
+
+<!-- Screen 1: Drop -->
+<div id="screen-drop">
+  <div id="logo">TEXT VISION FORMAT · V1</div>
+  <div id="title">TXV CONVERTER</div>
+  <div id="sub">MP4 · MOV · WEBM → .TXV</div>
+
+  <div id="drop-box" onclick="document.getElementById('file-input').click()">
+    <span id="drop-icon">▤</span>
+    DROP A VIDEO FILE HERE<br>
+    <span style="font-size:10px;opacity:0.5">MP4, MOV, WEBM · processed entirely in your browser</span>
+  </div>
+  <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm">
+</div>
+
+<!-- Screen 2: Settings -->
+<div id="screen-settings">
+  <div class="panel-title">Conversion Settings</div>
+
+  <div id="file-info">loading...</div>
+
+  <div class="setting">
+    <label>Columns</label>
+    <input type="range" id="set-cols" min="40" max="140" value="80" step="5">
+    <span class="setting-val" id="set-cols-val">80</span>
+  </div>
+
+  <div class="setting">
+    <label>Capture FPS</label>
+    <input type="range" id="set-fps" min="1" max="30" value="12" step="1">
+    <span class="setting-val" id="set-fps-val">12fps</span>
+  </div>
+
+  <div class="setting">
+    <label>Max duration</label>
+    <input type="range" id="set-dur" min="1" max="30" value="10" step="1">
+    <span class="setting-val" id="set-dur-val">10s</span>
+  </div>
+
+  <div class="setting">
+    <label>Contrast</label>
+    <input type="range" id="set-contrast" min="0.3" max="2.5" value="1.2" step="0.1">
+    <span class="setting-val" id="set-contrast-val">1.2</span>
+  </div>
+
+  <div class="setting" style="align-items:flex-start;margin-top:4px">
+    <label style="padding-top:4px">Colour mode</label>
+    <div class="btn-group">
+      <button class="modebt active" data-mode="color">COLOR</button>
+      <button class="modebt"        data-mode="bw">B&amp;W</button>
+      <button class="modebt"        data-mode="rainbow">RAINBOW</button>
+      <button class="modebt"        data-mode="edge">EDGE</button>
+    </div>
+  </div>
+
+  <div id="divider"></div>
+
+  <div id="btn-convert" onclick="startConvert()">▶ CONVERT TO .TXV</div>
+  <button id="btn-back-s" onclick="goTo('drop')">← choose different file</button>
+</div>
+
+<!-- Screen 3: Progress -->
+<div id="screen-progress">
+  <div id="prog-title">CONVERTING</div>
+  <div id="prog-sub">reading frames...</div>
+  <div id="prog-bar-wrap"><div id="prog-bar"></div></div>
+  <div id="preview-wrap"><pre id="preview-pre"></pre></div>
+  <div id="prog-stats">frame 0 / 0</div>
+  <button id="btn-cancel" onclick="cancelConvert()">cancel</button>
+</div>
+
+<!-- Screen 4: Done -->
+<div id="screen-done">
+  <div id="done-icon">✓</div>
+  <div id="done-title">CONVERSION COMPLETE</div>
+  <div id="done-stats"></div>
+  <div id="btn-dl" onclick="downloadTxv()">↓ DOWNLOAD .TXV</div>
+  <button id="btn-again" onclick="goTo('drop')">← convert another file</button>
+</div>
+
+<div id="scanline"></div>
+
+<video id="video" style="display:none" preload="metadata"></video>
+<canvas id="canvas" style="display:none"></canvas>
+
+<script>
+// ── Char set (same as cam) ──────────────────────────────────
+const CHARS = [
+  '`', '.', ',', '-', '_', '~', '^', ':', ';', '!',
+  '|', '/', '\\', '(', ')', '<', '>', '[', ']', '{',
+  '}', 'i', 'l', '1', 'r', 't', 'c', 'v', 'z', '+',
+  '=', '*', 'n', 'u', 'x', '?', 'e', 'a', 'o', 's',
+  'y', 'f', 'h', '%', 'k', 'p', 'd', 'q', 'b', '$',
+  'g', 'w', '#', '@', 'W', 'M', '&', '8'
+];
+
+const EDGE_THRESHOLD = 0.18;
+
+// ── State ──────────────────────────────────────────────────
+let videoFile   = null;
+let outputLines = null;   // final .txv text lines
+let cancelled   = false;
+let colMode     = 'color';
+let rainbowHue  = 0;
+
+const video  = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d', { willReadFrequently: true });
+
+// ── Navigation ─────────────────────────────────────────────
+function goTo(screen) {
+  ['drop','settings','progress','done'].forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    el.style.display = (s === screen) ? 'flex' : 'none';
+  });
+}
+
+// ── Helpers ────────────────────────────────────────────────
+function hsvToRgb(h, s, v) {
+  const i = Math.floor(h/60)%6, f = h/60-Math.floor(h/60);
+  const p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  const m=[[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i];
+  return [Math.round(m[0]*255), Math.round(m[1]*255), Math.round(m[2]*255)];
+}
+
+function sobelChar(imgData, col, row, cols, rows) {
+  function lum(x, y) {
+    x = Math.max(0,Math.min(cols-1,x)); y = Math.max(0,Math.min(rows-1,y));
+    const i = (y*cols+x)*4;
+    return (0.299*imgData[i]+0.587*imgData[i+1]+0.114*imgData[i+2])/255;
+  }
+  const tl=lum(col-1,row-1),tc=lum(col,row-1),tr=lum(col+1,row-1);
+  const ml=lum(col-1,row),mr=lum(col+1,row);
+  const bl=lum(col-1,row+1),bc=lum(col,row+1),br=lum(col+1,row+1);
+  const gx=(-tl+tr)+2*(-ml+mr)+(-bl+br);
+  const gy=(-tl-2*tc-tr)+(bl+2*bc+br);
+  const mag=Math.sqrt(gx*gx+gy*gy);
+  let angle=Math.atan2(gy,gx)*180/Math.PI;
+  if(angle<0) angle+=180;
+  let edgeChar;
+  if(angle<22.5||angle>=157.5) edgeChar='-';
+  else if(angle<67.5)          edgeChar='/';
+  else if(angle<112.5)         edgeChar='|';
+  else                         edgeChar='\\';
+  return { mag, edgeChar };
+}
+
+function rgbToHex(r,g,b) {
+  return '#'+[r,g,b].map(n=>n.toString(16).padStart(2,'0')).join('');
+}
+
+// Sample one canvas frame → {chars:string[], colorMap:{}}
+function sampleFrame(cols, rows, contrast, mode) {
+  const imgData = ctx.getImageData(0, 0, cols, rows).data;
+  const charRows = [];
+  const colorMap = {};
+  rainbowHue = (rainbowHue + 0.5) % 360;
+
+  for (let row = 0; row < rows; row++) {
+    let rowStr = '';
+    for (let col = 0; col < cols; col++) {
+      const idx = (row*cols+col)*4;
+      const r = imgData[idx], g = imgData[idx+1], b = imgData[idx+2];
+      const bright = (0.299*r+0.587*g+0.114*b)/255;
+      const cb = Math.max(0, Math.min(1, (bright-0.5)*contrast+0.5));
+
+      let ch, cr, cg, cbl;
+
+      if (mode === 'edge') {
+        const { mag, edgeChar } = sobelChar(imgData, col, row, cols, rows);
+        if (mag > EDGE_THRESHOLD) {
+          ch = edgeChar;
+          const intensity = Math.min(1, mag/0.6);
+          const v = Math.floor(180+intensity*75);
+          cr=cg=cbl=v;
+        } else {
+          ch = cb > 0.15 ? CHARS[Math.floor(cb*0.4*(CHARS.length-1))] : '`';
+          const v = Math.floor(cb*55); cr=cg=cbl=v;
+        }
+      } else {
+        ch = CHARS[Math.round(cb*(CHARS.length-1))];
+        if (mode === 'bw') {
+          const v=Math.floor(cb*255); cr=cg=cbl=v;
+        } else if (mode === 'rainbow') {
+          const hue=(rainbowHue+col*(360/cols)+row*1.5)%360;
+          [cr,cg,cbl]=hsvToRgb(hue,0.8,0.35+cb*0.65);
+        } else {
+          cr=r; cg=g; cbl=b;
+        }
+      }
+
+      rowStr += ch;
+      if (cr>4||cg>4||cbl>4) colorMap[col+','+row] = rgbToHex(cr,cg,cbl);
+    }
+    charRows.push(rowStr);
+  }
+  return { charRows, colorMap };
+}
+
+// ── File load ──────────────────────────────────────────────
+function loadFile(file) {
+  videoFile = file;
+  video.src = URL.createObjectURL(file);
+  video.onloadedmetadata = () => {
+    const dur  = video.duration;
+    const w    = video.videoWidth;
+    const h    = video.videoHeight;
+    const mb   = (file.size / 1024 / 1024).toFixed(1);
+    document.getElementById('file-info').innerHTML =
+      `<span>${file.name}</span><br>` +
+      `${w}×${h} &nbsp;·&nbsp; ${dur.toFixed(1)}s &nbsp;·&nbsp; ${mb} MB`;
+
+    // Cap max duration slider to video length
+    const durSlider = document.getElementById('set-dur');
+    durSlider.max   = Math.min(30, Math.floor(dur));
+    durSlider.value = Math.min(10, Math.floor(dur));
+    document.getElementById('set-dur-val').textContent = durSlider.value + 's';
+
+    goTo('settings');
+  };
+  video.onerror = () => alert('Could not read this video file.');
+}
+
+// ── Convert ────────────────────────────────────────────────
+async function startConvert() {
+  cancelled   = false;
+  outputLines = null;
+
+  const targetCols = parseInt(document.getElementById('set-cols').value);
+  const capFps     = parseInt(document.getElementById('set-fps').value);
+  const maxDur     = parseInt(document.getElementById('set-dur').value);
+  const contrast   = parseFloat(document.getElementById('set-contrast').value);
+  const mode       = colMode;
+
+  // Measure real char dimensions
+  const mc = document.createElement('canvas');
+  const mct = mc.getContext('2d');
+  const baseFs = 10;
+  mct.font = `bold ${baseFs}px 'Courier New', monospace`;
+  const charW = mct.measureText('M').width;
+  const charH = baseFs;
+
+  const aspect = video.videoWidth / video.videoHeight;
+  const targetRows = Math.round(targetCols * (charW/charH) / aspect);
+
+  canvas.width  = targetCols;
+  canvas.height = targetRows;
+
+  const duration   = Math.min(video.duration, maxDur);
+  const totalFrames = Math.round(duration * capFps);
+  const frameStep  = duration / totalFrames;
+
+  goTo('progress');
+
+  // Scale preview font to fit preview box
+  const previewEl = document.getElementById('preview-pre');
+  const previewMaxW = document.querySelector('#preview-wrap').offsetWidth - 2;
+  mct.font = `bold ${baseFs}px 'Courier New', monospace`;
+  const previewScale = previewMaxW / (targetCols * charW);
+  const previewFs = Math.min(baseFs * previewScale, 11);
+  previewEl.style.fontSize   = previewFs + 'px';
+  previewEl.style.lineHeight = '1';
+
+  const lines = [];
+  lines.push('#txv v1');
+  lines.push(`#size ${targetCols}x${targetRows}`);
+  lines.push(`#fps ${capFps}`);
+  lines.push(`#frames ${totalFrames}`);
+  lines.push(`#mode ${mode}`);
+  lines.push('---');
+
+  for (let f = 0; f < totalFrames; f++) {
+    if (cancelled) return;
+
+    // Seek video to frame time
+    const t = f * frameStep;
+    await seekTo(t);
+
+    // Draw to canvas
+    ctx.save();
+    ctx.drawImage(video, 0, 0, targetCols, targetRows);
+    ctx.restore();
+
+    // Sample
+    const { charRows, colorMap } = sampleFrame(targetCols, targetRows, contrast, mode);
+
+    // Write frame
+    lines.push(`#frame ${f+1}`);
+    charRows.forEach(r => lines.push(r));
+    lines.push('#colors');
+    Object.entries(colorMap).forEach(([k,v]) => lines.push(`${k},${v}`));
+    lines.push('---');
+
+    // Update UI
+    const pct = ((f+1)/totalFrames*100).toFixed(0);
+    document.getElementById('prog-bar').style.width = pct + '%';
+    document.getElementById('prog-sub').textContent  = `frame ${f+1} of ${totalFrames}`;
+    document.getElementById('prog-stats').textContent =
+      `${pct}% · ${targetCols}×${targetRows} · ${capFps}fps · ${mode.toUpperCase()}`;
+
+    // Live preview — render coloured spans
+    if (f % 3 === 0) {
+      let html = '';
+      for (let row = 0; row < targetRows; row++) {
+        for (let col = 0; col < targetCols; col++) {
+          const ch  = charRows[row][col] || '`';
+          const hex = colorMap[col+','+row] || '#000';
+          const safe = ch==='<'?'&lt;':ch==='>'?'&gt;':ch==='&'?'&amp;':ch;
+          html += `<span style="color:${hex}">${safe}</span>`;
+        }
+        html += '\n';
+      }
+      previewEl.innerHTML = html;
+    }
+
+    // Yield to keep UI responsive
+    await tick();
+  }
+
+  outputLines = lines;
+
+  // Done
+  const sizeKb = (lines.join('\n').length / 1024).toFixed(0);
+  document.getElementById('done-stats').innerHTML =
+    `<span style="color:#00ff41">${totalFrames} frames</span> &nbsp;·&nbsp; ` +
+    `${targetCols}×${targetRows} chars &nbsp;·&nbsp; ${capFps}fps<br>` +
+    `file size: ~${sizeKb} KB &nbsp;·&nbsp; mode: ${mode.toUpperCase()}`;
+
+  goTo('done');
+}
+
+function cancelConvert() {
+  cancelled = true;
+  goTo('settings');
+}
+
+function downloadTxv() {
+  if (!outputLines) return;
+  const text = outputLines.join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = (videoFile ? videoFile.name.replace(/\.[^.]+$/, '') : 'output') + '.txv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Utilities ──────────────────────────────────────────────
+function seekTo(t) {
+  return new Promise(resolve => {
+    video.onseeked = () => { video.onseeked = null; resolve(); };
+    video.currentTime = t;
+  });
+}
+
+function tick() {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+// ── Controls wiring ────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', function() {
+  if (this.files[0]) loadFile(this.files[0]);
+  this.value = '';
+});
+
+const dropBox = document.getElementById('drop-box');
+dropBox.addEventListener('dragover',  e => { e.preventDefault(); dropBox.classList.add('over'); });
+dropBox.addEventListener('dragleave', ()=> dropBox.classList.remove('over'));
+dropBox.addEventListener('drop', e => {
+  e.preventDefault(); dropBox.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+document.getElementById('set-cols').addEventListener('input', function() {
+  document.getElementById('set-cols-val').textContent = this.value;
+});
+document.getElementById('set-fps').addEventListener('input', function() {
+  document.getElementById('set-fps-val').textContent = this.value + 'fps';
+});
+document.getElementById('set-dur').addEventListener('input', function() {
+  document.getElementById('set-dur-val').textContent = this.value + 's';
+});
+document.getElementById('set-contrast').addEventListener('input', function() {
+  document.getElementById('set-contrast-val').textContent = parseFloat(this.value).toFixed(1);
+});
+
+document.querySelectorAll('.modebt').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.modebt').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    colMode = this.dataset.mode;
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TXV PLAYER</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    font-family: 'Courier New', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: #00ff41;
+  }
+
+  /* ── Drop zone ── */
+  #dropzone {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 18px; z-index: 100;
+    transition: background 0.2s;
+  }
+  #dropzone.drag-over { background: rgba(0,255,65,0.04); }
+
+  #dz-title {
+    font-size: 22px; letter-spacing: 0.4em;
+    color: #00ff41; text-shadow: 0 0 20px #00ff41;
+  }
+  #dz-sub { font-size: 11px; color: #444; letter-spacing: 0.15em; }
+
+  #dz-box {
+    border: 1px dashed #1a4a1a;
+    padding: 32px 56px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    font-size: 11px; color: #444; letter-spacing: 0.12em;
+  }
+  #dz-box:hover, #dropzone.drag-over #dz-box {
+    border-color: #00ff41; color: #00ff41;
+    box-shadow: 0 0 24px rgba(0,255,65,0.1);
+  }
+  #dz-box span { display: block; font-size: 28px; margin-bottom: 10px; opacity: 0.4; }
+  #file-input { display: none; }
+
+  #dz-error { font-size: 11px; color: #ff5555; letter-spacing: 0.1em; }
+
+  /* ── Player UI ── */
+  #player { display: none; flex-direction: column; width: 100%; height: 100%; }
+
+  #ui {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    gap: 18px; padding: 8px 20px;
+    background: rgba(0,0,0,0.95);
+    border-bottom: 1px solid #111;
+    font-size: 11px; letter-spacing: 0.08em;
+  }
+
+  #title-bar {
+    font-size: 12px; font-weight: bold;
+    letter-spacing: 0.2em; color: #00ff41;
+    text-shadow: 0 0 8px #00ff41;
+  }
+
+  .btn {
+    background: none; border: 1px solid #1a3a1a; color: #666;
+    padding: 3px 10px; font-family: 'Courier New', monospace;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; border-radius: 2px; transition: all 0.15s;
+  }
+  .btn.active, .btn:hover {
+    border-color: #00ff41; color: #00ff41;
+    background: rgba(0,255,65,0.05);
+  }
+  .control { display: flex; align-items: center; gap: 7px; color: #888; }
+  .control label { color: #aaa; font-size: 10px; letter-spacing: 0.1em; }
+
+  input[type=range] {
+    -webkit-appearance: none; height: 2px;
+    background: #1a3a1a; outline: none; border-radius: 2px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 9px; height: 9px;
+    border-radius: 50%; background: #00ff41; cursor: pointer;
+  }
+
+  #frame-counter { font-size: 10px; color: #555; letter-spacing: 0.1em; min-width: 52px; }
+  #speed-val     { font-size: 10px; color: #00ff41; min-width: 28px; }
+
+  /* Scrubber */
+  #scrub-wrap {
+    flex-shrink: 0;
+    padding: 0 0 2px 0;
+    background: #000;
+  }
+  #scrubber {
+    -webkit-appearance: none; width: 100%; height: 3px;
+    background: #0d0d0d; outline: none; display: block; cursor: pointer;
+  }
+  #scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 8px; height: 12px;
+    background: #00ff41; border-radius: 1px; cursor: pointer;
+  }
+
+  /* Output text */
+  #output {
+    flex: 1; overflow: hidden;
+    display: flex; align-items: flex-start; justify-content: center;
+    user-select: text; -webkit-user-select: text; cursor: text;
+  }
+  #pre {
+    font-family: 'Courier New', monospace;
+    font-weight: bold; line-height: 1;
+    letter-spacing: 0; white-space: pre; display: block;
+  }
+
+  /* Back button */
+  #btn-back {
+    font-size: 10px; color: #333; letter-spacing: 0.1em;
+    background: none; border: none; cursor: pointer;
+    font-family: 'Courier New', monospace;
+  }
+  #btn-back:hover { color: #00ff41; }
+
+  #scanline {
+    position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom, transparent 0px, transparent 2px,
+      rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+    );
+    z-index: 5;
+  }
+</style>
+</head>
+<body>
+
+<!-- Drop zone -->
+<div id="dropzone">
+  <div id="dz-title">TXV PLAYER</div>
+  <p id="dz-sub">text vision format · v1</p>
+  <div id="dz-box" onclick="document.getElementById('file-input').click()">
+    <span>⬡</span>
+    DROP A .TXV FILE HERE<br>
+    <span style="font-size:10px;margin-top:6px;display:block;opacity:0.5">or click to browse</span>
+  </div>
+  <input type="file" id="file-input" accept=".txv,.txt">
+  <p id="dz-error"></p>
+</div>
+
+<!-- Player -->
+<div id="player">
+  <div id="ui">
+    <span id="title-bar">TXV PLAYER</span>
+    <button class="btn active" id="btn-play"    onclick="togglePlay()">&#9646;&#9646; PAUSE</button>
+    <button class="btn"        id="btn-rev"     onclick="toggleReverse()" title="Reverse">&#9664;&#9664;</button>
+    <button class="btn"        id="btn-ping"    onclick="togglePingPong()" title="Ping-pong loop">&#8644;</button>
+    <button class="btn active" id="btn-loop"    onclick="toggleLoop()">&#8635; LOOP</button>
+    <button class="btn"        id="btn-glitch"  onclick="toggleGlitch()" title="Glitch effect">&#9762;</button>
+    <button class="btn"        id="btn-theme"   onclick="cycleTheme()" title="Colour theme override">&#9676;</button>
+    <span   id="theme-label"   style="font-size:10px;color:#555;letter-spacing:0.08em;min-width:40px">RGB</span>
+    <div class="control">
+      <label>SPEED</label>
+      <input type="range" id="speed-slider" min="0.25" max="4" value="1" step="0.25" style="width:65px">
+      <span id="speed-val">1×</span>
+    </div>
+    <span id="frame-counter">1 / --</span>
+    <div style="flex:1"></div>
+    <button class="btn" id="btn-export-frame" onclick="exportCurrentFrame()">&#8595; HTML</button>
+    <button class="btn" onclick="loadNew()">&#8617; OPEN</button>
+    <button id="btn-back" onclick="goBack()">← back</button>
+  </div>
+  <div id="scrub-wrap">
+    <input type="range" id="scrubber" min="0" value="0">
+  </div>
+  <div id="output">
+    <pre id="pre"></pre>
+  </div>
+</div>
+
+<div id="scanline"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+let txv         = null;
+let frameIdx    = 0;
+let playing     = true;
+let looping     = true;
+let reversed    = false;
+let pingPong    = false;
+let pingDir     = 1;   // 1=forward, -1=backward
+let speed       = 1;
+let timer       = null;
+let framePool   = [];
+let glitchOn    = false;
+let glitchPool  = [];   // indices of glitched cells this frame
+// Theme: 'rgb'=original, 'matrix'=green, 'amber', 'ice', 'void'=greyscale inverted
+const THEMES = ['rgb','matrix','amber','ice','void'];
+let themeIdx    = 0;
+const THEME_LABELS = ['RGB','MATRIX','AMBER','ICE','VOID'];
+
+const pre      = document.getElementById('pre');
+const scrubber = document.getElementById('scrubber');
+const counter  = document.getElementById('frame-counter');
+
+// ── TXV Parser ─────────────────────────────────────────────
+/*
+  Format spec:
+  #txv v1
+  #size COLSxROWS
+  #fps N
+  #frames N
+  #mode color|bw|rainbow|edge
+  ---
+  #frame N
+  <rows lines of raw chars>
+  #colors
+  col,row,#rrggbb   (only non-black cells)
+  ---
+  (repeat for each frame)
+*/
+function parseTxv(text) {
+  const lines  = text.split('\n');
+  let i = 0;
+
+  function nextLine() { return i < lines.length ? lines[i++].trimEnd() : null; }
+  function peek()     { return i < lines.length ? lines[i].trimEnd()   : null; }
+
+  // Header
+  const header = {};
+  while (i < lines.length && !lines[i].startsWith('---')) {
+    const l = lines[i++].trim();
+    const m = l.match(/^#(\w+)\s+(.+)$/);
+    if (m) header[m[1]] = m[2];
+  }
+  i++; // skip first ---
+
+  if (!header.size) throw new Error('Missing #size');
+  const [cols, rows] = header.size.split('x').map(Number);
+  const fps    = parseFloat(header.fps)    || 24;
+  const nFrames= parseInt(header.frames)   || 0;
+  const mode   = header.mode               || 'color';
+
+  const frames = [];
+
+  while (i < lines.length) {
+    const l = lines[i++].trim();
+    if (!l.startsWith('#frame')) continue;
+
+    // Read char rows
+    const chars = [];
+    for (let r = 0; r < rows; r++) {
+      const row = nextLine() || '';
+      chars.push(row);
+    }
+
+    // Read colors
+    const colorMap = {}; // "col,row" -> hex
+    if (peek() === '#colors') {
+      i++; // skip #colors
+      while (i < lines.length && lines[i].trim() !== '---') {
+        const cl = lines[i++].trim();
+        if (!cl) continue;
+        const parts = cl.split(',');
+        if (parts.length === 3) {
+          colorMap[parts[0] + ',' + parts[1]] = parts[2];
+        }
+      }
+    }
+    if (peek() === '---') i++; // skip ---
+
+    frames.push({ chars, colorMap });
+  }
+
+  return { cols, rows, fps, mode, frames };
+}
+
+// ── Grid builder ───────────────────────────────────────────
+function buildGrid(cols, rows) {
+  pre.innerHTML = '';
+  framePool = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const span = document.createElement('span');
+      pre.appendChild(span);
+      framePool.push(span);
+    }
+    if (r < rows - 1) pre.appendChild(document.createTextNode('\n'));
+  }
+}
+
+function fitFont(cols, rows) {
+  const mc  = document.createElement('canvas');
+  const mct = mc.getContext('2d');
+  const baseFs = 10;
+  mct.font = "bold " + baseFs + "px 'Courier New', monospace";
+  const charW = mct.measureText('M').width;
+  const charH = baseFs;
+
+  const uiH  = document.getElementById('ui').offsetHeight + 3;
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight - uiH;
+
+  const scale = Math.min(maxW / (cols * charW), maxH / (rows * charH));
+  pre.style.fontSize   = (baseFs * scale) + 'px';
+  pre.style.lineHeight = '1';
+  pre.style.letterSpacing = '0';
+}
+
+// ── Theme colour mapper ────────────────────────────────────
+function applyTheme(hex, bright) {
+  const theme = THEMES[themeIdx];
+  if (theme === 'rgb')    return hex;
+  const v = Math.round(bright * 255);
+  if (theme === 'matrix') return `rgb(0,${Math.max(20,v)},${Math.round(v*0.15)})`;
+  if (theme === 'amber')  return `rgb(${Math.max(20,v)},${Math.round(v*0.55)},0)`;
+  if (theme === 'ice')    return `rgb(${Math.round(v*0.55)},${Math.round(v*0.85)},${Math.max(20,v)})`;
+  if (theme === 'void')   return `rgb(${255-v},${255-v},${255-v})`; // inverted grey
+  return hex;
+}
+
+function hexBright(hex) {
+  // quick luminance from #rrggbb
+  if (!hex || hex.length < 7) return 0;
+  const r = parseInt(hex.slice(1,3),16)/255;
+  const g = parseInt(hex.slice(3,5),16)/255;
+  const b = parseInt(hex.slice(5,7),16)/255;
+  return 0.299*r + 0.587*g + 0.114*b;
+}
+
+// ── Render a frame ─────────────────────────────────────────
+function renderFrame(idx) {
+  if (!txv || !txv.frames[idx]) return;
+  const { chars, colorMap } = txv.frames[idx];
+  const { cols, rows } = txv;
+  const total = cols * rows;
+
+  // Build glitch set for this frame
+  const glitchSet = new Set();
+  if (glitchOn) {
+    const n = Math.floor(total * 0.06);
+    for (let k = 0; k < n; k++) glitchSet.add(Math.floor(Math.random() * total));
+  }
+
+  const GCHARS = '@#%&8$W?!/\|';
+  for (let r = 0; r < rows; r++) {
+    const row = chars[r] || '';
+    for (let c = 0; c < cols; c++) {
+      const span  = framePool[r * cols + c];
+      const key   = c + ',' + r;
+      const hex   = colorMap[key] || '#000000';
+      const cellI = r * cols + c;
+
+      if (glitchOn && glitchSet.has(cellI)) {
+        span.textContent = GCHARS[Math.floor(Math.random()*GCHARS.length)];
+        const hue = Math.random()*360;
+        span.style.color = `hsl(${hue},100%,60%)`;
+      } else {
+        span.textContent = row[c] || ' ';
+        const bright = hexBright(hex);
+        span.style.color = applyTheme(hex, bright);
+      }
+    }
+  }
+
+  counter.textContent = (idx + 1) + ' / ' + txv.frames.length;
+  scrubber.value = idx;
+}
+
+// ── Playback ───────────────────────────────────────────────
+function startPlayback() {
+  if (timer) clearInterval(timer);
+  const ms = (1000 / txv.fps) / speed;
+  timer = setInterval(() => {
+    if (!playing) return;
+
+    // Advance index
+    if (pingPong) {
+      frameIdx += pingDir;
+      if (frameIdx >= txv.frames.length) { pingDir = -1; frameIdx = txv.frames.length - 2; }
+      else if (frameIdx < 0)             { pingDir =  1; frameIdx = 1; }
+    } else if (reversed) {
+      frameIdx--;
+      if (frameIdx < 0) {
+        if (looping) frameIdx = txv.frames.length - 1;
+        else { frameIdx = 0; playing = false; updatePlayBtn(); clearInterval(timer); return; }
+      }
+    } else {
+      frameIdx++;
+      if (frameIdx >= txv.frames.length) {
+        if (looping) frameIdx = 0;
+        else { frameIdx = txv.frames.length - 1; playing = false; updatePlayBtn(); clearInterval(timer); return; }
+      }
+    }
+    renderFrame(frameIdx);
+  }, ms);
+}
+
+function updatePlayBtn() {
+  document.getElementById('btn-play').innerHTML = playing ? '&#9646;&#9646; PAUSE' : '&#9654; PLAY';
+}
+
+function togglePlay() {
+  playing = !playing;
+  updatePlayBtn();
+  if (playing && !pingPong) {
+    if (reversed && frameIdx <= 0) frameIdx = txv.frames.length - 1;
+    if (!reversed && frameIdx >= txv.frames.length - 1) frameIdx = 0;
+  }
+}
+
+function toggleLoop() {
+  looping = !looping;
+  document.getElementById('btn-loop').classList.toggle('active', looping);
+}
+
+function toggleReverse() {
+  reversed = !reversed;
+  pingPong = false;
+  document.getElementById('btn-rev').classList.toggle('active', reversed);
+  document.getElementById('btn-ping').classList.remove('active');
+}
+
+function togglePingPong() {
+  pingPong = !pingPong;
+  reversed = false;
+  pingDir  = 1;
+  document.getElementById('btn-ping').classList.toggle('active', pingPong);
+  document.getElementById('btn-rev').classList.remove('active');
+}
+
+function toggleGlitch() {
+  glitchOn = !glitchOn;
+  document.getElementById('btn-glitch').classList.toggle('active', glitchOn);
+}
+
+function cycleTheme() {
+  themeIdx = (themeIdx + 1) % THEMES.length;
+  document.getElementById('theme-label').textContent = THEME_LABELS[themeIdx];
+  const active = THEMES[themeIdx] !== 'rgb';
+  document.getElementById('btn-theme').classList.toggle('active', active);
+  if (txv) renderFrame(frameIdx); // re-render current frame with new theme
+}
+
+// ── Load file ──────────────────────────────────────────────
+function loadTxv(text) {
+  try {
+    txv = parseTxv(text);
+  } catch(e) {
+    document.getElementById('dz-error').textContent = 'Parse error: ' + e.message;
+    return;
+  }
+
+  if (txv.frames.length === 0) {
+    document.getElementById('dz-error').textContent = 'No frames found in file.';
+    return;
+  }
+
+  // Show player
+  document.getElementById('dropzone').style.display = 'none';
+  document.getElementById('player').style.display   = 'flex';
+
+  scrubber.max = txv.frames.length - 1;
+  scrubber.value = 0;
+  frameIdx = 0;
+
+  buildGrid(txv.cols, txv.rows);
+  fitFont(txv.cols, txv.rows);
+  renderFrame(0);
+
+  playing = true;
+  document.getElementById('btn-play').textContent = '❚❚ PAUSE';
+  document.getElementById('btn-loop').classList.add('active');
+  looping = true;
+
+  startPlayback();
+}
+
+// ── Export current frame as HTML ───────────────────────────
+function exportCurrentFrame() {
+  if (!txv) return;
+  const { chars, colorMap } = txv.frames[frameIdx];
+  const { cols, rows } = txv;
+  let spans = '';
+  for (let r = 0; r < rows; r++) {
+    const row = chars[r] || '';
+    for (let c = 0; c < cols; c++) {
+      const ch  = row[c] || ' ';
+      const hex = colorMap[c + ',' + r] || '#000';
+      const safe = ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch === '&' ? '&amp;' : ch;
+      spans += `<span style="color:${hex}">${safe}</span>`;
+    }
+    spans += '\n';
+  }
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>TXV Frame ${frameIdx+1}</title>
+<style>body{background:#000;margin:0;padding:16px}pre{font-family:'Courier New',monospace;font-weight:bold;font-size:11px;line-height:1;letter-spacing:0;white-space:pre}</style>
+</head><body><pre>${spans}</pre></body></html>`;
+  dl('txv-frame-' + (frameIdx+1) + '.html', html, 'text/html');
+}
+
+function dl(name, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function goBack() {
+  if (timer) clearInterval(timer);
+  txv = null; framePool = []; pre.innerHTML = '';
+  document.getElementById('player').style.display   = 'none';
+  document.getElementById('dropzone').style.display = 'flex';
+  document.getElementById('dz-error').textContent   = '';
+}
+
+function loadNew() {
+  document.getElementById('file-input').click();
+}
+
+// ── File input / drag & drop ───────────────────────────────
+document.getElementById('file-input').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = e => loadTxv(e.target.result);
+  r.readAsText(f);
+  this.value = '';
+});
+
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', e => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => loadTxv(ev.target.result);
+  r.readAsText(f);
+});
+
+// ── Controls ───────────────────────────────────────────────
+scrubber.addEventListener('input', function() {
+  frameIdx = parseInt(this.value);
+  renderFrame(frameIdx);
+});
+
+document.getElementById('speed-slider').addEventListener('input', function() {
+  speed = parseFloat(this.value);
+  document.getElementById('speed-val').textContent = speed + '×';
+  if (txv) startPlayback();
+});
+
+window.addEventListener('resize', () => {
+  if (txv) fitFont(txv.cols, txv.rows);
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (!txv) return;
+  if (e.code === 'Space')       { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowRight')  { frameIdx = Math.min(txv.frames.length-1, frameIdx+1); renderFrame(frameIdx); }
+  if (e.code === 'ArrowLeft')   { frameIdx = Math.max(0, frameIdx-1); renderFrame(frameIdx); }
+  if (e.code === 'KeyL')        toggleLoop();
+  if (e.code === 'KeyR')        toggleReverse();
+  if (e.code === 'KeyP')        togglePingPong();
+  if (e.code === 'KeyG')        toggleGlitch();
+  if (e.code === 'KeyT')        cycleTheme();
+});
+</script>
+</body>
+</html>

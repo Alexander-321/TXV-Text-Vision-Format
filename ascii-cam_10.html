@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCII CAM</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    font-family: 'Courier New', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #ui {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 8px 20px;
+    background: rgba(0,0,0,0.95);
+    border-bottom: 1px solid #111;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    z-index: 10;
+  }
+
+  #title {
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.25em;
+    color: #00ff41;
+    text-shadow: 0 0 10px #00ff41;
+  }
+
+  .control { display: flex; align-items: center; gap: 8px; color: #888; }
+  .control label { color: #aaa; font-size: 10px; letter-spacing: 0.1em; }
+
+  input[type=range] {
+    -webkit-appearance: none; width: 70px; height: 2px;
+    background: #1a3a1a; outline: none; border-radius: 2px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 9px; height: 9px;
+    border-radius: 50%; background: #00ff41; cursor: pointer;
+  }
+  #val { color: #00ff41; min-width: 28px; font-size: 10px; }
+
+  .btn {
+    background: none; border: 1px solid #1a3a1a; color: #666;
+    padding: 3px 10px; font-family: 'Courier New', monospace;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; border-radius: 2px; transition: all 0.15s;
+  }
+  .btn.active, .btn:hover {
+    border-color: #00ff41; color: #00ff41;
+    background: rgba(0,255,65,0.05);
+  }
+
+  /* The actual text output — this IS the document */
+  #output {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0;
+    cursor: text;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  #pre {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: pre;
+    word-break: break-all;
+    display: block;
+    /* font-size set dynamically */
+  }
+
+  /* Each character is a real span — selectable, copyable */
+  #pre span {
+    display: inline;
+  }
+
+  /* Overlay */
+  #overlay {
+    position: fixed; inset: 0; background: #000;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px; z-index: 100; padding: 20px;
+  }
+  #overlay-title {
+    font-size: 22px; letter-spacing: 0.4em;
+    color: #00ff41; text-shadow: 0 0 20px #00ff41;
+    font-family: 'Courier New', monospace;
+  }
+  #msg {
+    font-size: 11px; color: #555; letter-spacing: 0.1em;
+    max-width: 520px; text-align: center; line-height: 2;
+    font-family: 'Courier New', monospace;
+  }
+  #msg.error { color: #ff5555; }
+  #start-btn {
+    background: none; border: 1px solid #00ff41; color: #00ff41;
+    padding: 12px 32px; font-family: 'Courier New', monospace;
+    font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase;
+    cursor: pointer; border-radius: 2px;
+    box-shadow: 0 0 20px rgba(0,255,65,0.15); transition: all 0.2s;
+  }
+  #start-btn:hover { background: rgba(0,255,65,0.07); }
+  code {
+    background: #0a1a0a; padding: 2px 6px;
+    border-radius: 3px; color: #00ff41; font-size: 11px;
+  }
+  .blink { animation: blink 1.2s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  #scanline {
+    position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom, transparent 0px, transparent 2px,
+      rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+    );
+    z-index: 5;
+  }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <div id="overlay-title">ASCII CAM</div>
+  <p id="msg" class="blink">[ INITIALIZE CAMERA FEED ]</p>
+  <button id="start-btn" onclick="startCamera()">CONNECT</button>
+  <p style="font-size:10px;color:#2a2a2a;letter-spacing:0.1em;font-family:monospace">webcam access required</p>
+</div>
+
+<div id="ui" style="display:none">
+  <span id="title">ASCII CAM</span>
+  <div class="control">
+    <label>RES</label>
+    <input type="range" id="res-slider" min="0" max="4" value="2" step="1">
+    <span id="val">80c</span>
+  </div>
+  <div class="control">
+    <label>REFRESH</label>
+    <input type="range" id="fps-slider" min="1" max="60" value="24" step="1">
+    <span id="fps-val">24fps</span>
+  </div>
+  <button class="btn active" id="btn-color"   onclick="setMode('color')">COLOR</button>
+  <button class="btn"        id="btn-bw"      onclick="setMode('bw')">B&amp;W</button>
+  <button class="btn"        id="btn-rainbow" onclick="setMode('rainbow')">RAINBOW</button>
+  <button class="btn"        id="btn-edge"    onclick="setMode('edge')">EDGE</button>
+  <div class="control" style="gap:6px">
+    <label>ASPECT</label>
+    <button class="btn active" id="asp-169"  onclick="setAspect(16/9,  this)">16:9</button>
+    <button class="btn"        id="asp-11"   onclick="setAspect(1/1,   this)">1:1</button>
+    <button class="btn"        id="asp-43"   onclick="setAspect(4/3,   this)">4:3</button>
+    <button class="btn"        id="asp-cam"  onclick="setAspect(0,     this)">CAM</button>
+  </div>
+  <div style="width:1px;height:16px;background:#1a3a1a;margin:0 4px"></div>
+  <button class="btn" id="btn-freeze" onclick="toggleFreeze()">&#9646;&#9646; FREEZE</button>
+  <button class="btn" id="btn-txt"    onclick="exportAs('txt')">&#8595; TXT</button>
+  <button class="btn" id="btn-html"   onclick="exportAs('html')">&#8595; HTML</button>
+</div>
+
+<div id="output">
+  <pre id="pre"></pre>
+</div>
+
+<div id="scanline"></div>
+<video id="video" autoplay playsinline muted style="display:none"></video>
+<canvas id="canvas-in" style="display:none"></canvas>
+
+<script>
+const CHARS = [
+  '`', '.', ',', '-', '_', '~', '^', ':', ';', '!',
+  '|', '/', '\\', '(', ')', '<', '>', '[', ']', '{',
+  '}', 'i', 'l', '1', 'r', 't', 'c', 'v', 'z', '+',
+  '=', '*', 'n', 'u', 'x', '?', 'e', 'a', 'o', 's',
+  'y', 'f', 'h', '%', 'k', 'p', 'd', 'q', 'b', '$',
+  'g', 'w', '#', '@', 'W', 'M', '&', '8'
+];
+
+// Edge chars keyed by angle bucket (0=horizontal, 1=diagonal/, 2=vertical, 3=diagonal\)
+const EDGE_CHARS = ['-', '/', '|', '\\'];
+
+const COLS_LEVELS = [50, 70, 90, 115, 140];
+const FONT_SIZES  = [13, 10, 8,  6.5, 5.5];
+
+let mode         = 'color';
+let resLevel     = 2;
+let cols, rows, fontSize;
+let running      = false;
+let frozen       = false;
+let rainbowHue   = 0;
+let charFps      = 24;
+let lastCharUpdate = 0;
+let forcedAspect = 16/9;
+let framePool    = [];
+// Store last rendered frame data for export
+let lastFrame    = []; // [{ch, r, g, b}, ...]
+
+const video    = document.getElementById('video');
+const canvasIn = document.getElementById('canvas-in');
+const ctxIn    = canvasIn.getContext('2d', { willReadFrequently: true });
+const pre      = document.getElementById('pre');
+const slider   = document.getElementById('res-slider');
+const valEl    = document.getElementById('val');
+const msgEl    = document.getElementById('msg');
+
+function buildGrid() {
+  pre.innerHTML = '';
+  framePool = [];
+  lastFrame = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const span = document.createElement('span');
+      span.textContent = '`';
+      pre.appendChild(span);
+      framePool.push(span);
+      lastFrame.push({ ch: '`', r: 0, g: 0, b: 0 });
+    }
+    if (row < rows - 1) pre.appendChild(document.createTextNode('\n'));
+  }
+}
+
+const _mc  = document.createElement('canvas');
+const _mct = _mc.getContext('2d');
+
+function calcDimensions() {
+  cols = COLS_LEVELS[resLevel];
+  const baseFs = FONT_SIZES[resLevel];
+  _mct.font = "bold " + baseFs + "px 'Courier New', monospace";
+  const charW = _mct.measureText('M').width;
+  const charH = baseFs;
+  const camAspect = (video.videoWidth || 640) / (video.videoHeight || 480);
+  const aspect    = forcedAspect > 0 ? forcedAspect : camAspect;
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight - document.getElementById('ui').offsetHeight - 4;
+  rows = Math.round(cols * (charW / charH) / aspect);
+  const scale = Math.min(maxW / (cols * charW), maxH / (rows * charH));
+  fontSize = baseFs * scale;
+  canvasIn.width  = cols;
+  canvasIn.height = rows;
+  pre.style.fontSize   = fontSize + 'px';
+  pre.style.lineHeight = '1';
+  pre.style.letterSpacing = '0';
+  valEl.textContent = cols + 'c';
+}
+
+function resizeOutput() {
+  calcDimensions();
+  buildGrid();
+}
+
+function hsvToRgb(h, s, v) {
+  const i = Math.floor(h / 60) % 6;
+  const f = h / 60 - Math.floor(h / 60);
+  const p = v*(1-s), q = v*(1-f*s), t = v*(1-(1-f)*s);
+  const m = [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i];
+  return [Math.round(m[0]*255), Math.round(m[1]*255), Math.round(m[2]*255)];
+}
+
+// Sobel edge detection — returns {ch, magnitude} per cell
+// Works on the cols×rows grayscale image already in imgData
+function sobelChar(imgData, col, row) {
+  // Safe pixel brightness lookup
+  function lum(x, y) {
+    x = Math.max(0, Math.min(cols-1, x));
+    y = Math.max(0, Math.min(rows-1, y));
+    const i = (y * cols + x) * 4;
+    return (0.299*imgData[i] + 0.587*imgData[i+1] + 0.114*imgData[i+2]) / 255;
+  }
+  const tl=lum(col-1,row-1), tc=lum(col,row-1), tr=lum(col+1,row-1);
+  const ml=lum(col-1,row  ),                     mr=lum(col+1,row  );
+  const bl=lum(col-1,row+1), bc=lum(col,row+1),  br=lum(col+1,row+1);
+
+  const gx = (-tl + tr) + 2*(-ml + mr) + (-bl + br);
+  const gy = (-tl - 2*tc - tr) + (bl + 2*bc + br);
+
+  const mag = Math.sqrt(gx*gx + gy*gy);
+
+  // Angle in degrees, 0=right, going counter-clockwise
+  let angle = Math.atan2(gy, gx) * 180 / Math.PI;
+  if (angle < 0) angle += 180; // fold to 0–180
+
+  // Map angle to char:
+  // 0–22.5 or 157.5–180 → horizontal  -
+  // 22.5–67.5           → diagonal    /  (but actually \ in screen coords, let's test)
+  // 67.5–112.5          → vertical    |
+  // 112.5–157.5         → diagonal    \
+  let edgeChar;
+  if      (angle < 22.5  || angle >= 157.5) edgeChar = '-';
+  else if (angle < 67.5)                    edgeChar = '/';
+  else if (angle < 112.5)                   edgeChar = '|';
+  else                                      edgeChar = '\\';
+
+  return { mag, edgeChar };
+}
+
+const EDGE_THRESHOLD = 0.18; // tune this — lower = more edges shown
+
+function render(ts) {
+  if (!running || frozen) {
+    if (running) requestAnimationFrame(render);
+    return;
+  }
+
+  const interval = 1000 / charFps;
+  const due = (ts - lastCharUpdate) >= interval;
+
+  if (due) {
+    lastCharUpdate = ts;
+
+    ctxIn.save();
+    ctxIn.translate(cols, 0);
+    ctxIn.scale(-1, 1);
+    ctxIn.drawImage(video, 0, 0, cols, rows);
+    ctxIn.restore();
+
+    const imgData = ctxIn.getImageData(0, 0, cols, rows).data;
+    rainbowHue = (rainbowHue + 0.5) % 360;
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const idx    = (row * cols + col) * 4;
+        const r      = imgData[idx];
+        const g      = imgData[idx+1];
+        const b      = imgData[idx+2];
+        const bright = (0.299*r + 0.587*g + 0.114*b) / 255;
+
+        let ch, color;
+
+        if (mode === 'edge') {
+          const { mag, edgeChar } = sobelChar(imgData, col, row);
+          if (mag > EDGE_THRESHOLD) {
+            ch = edgeChar;
+            // Color edges white-ish, dimmer where edge is weaker
+            const intensity = Math.min(1, mag / 0.6);
+            const v = Math.floor(180 + intensity * 75);
+            color = `rgb(${v},${v},${v})`;
+          } else {
+            // Non-edge: very dim background char
+            ch = bright > 0.15 ? CHARS[Math.floor(bright * 0.4 * (CHARS.length-1))] : ' ';
+            const v = Math.floor(bright * 55);
+            color = `rgb(${v},${v},${v})`;
+          }
+        } else {
+          ch = CHARS[Math.round(bright * (CHARS.length - 1))];
+          if (mode === 'bw') {
+            const v = Math.floor(bright * 255);
+            color = `rgb(${v},${v},${v})`;
+          } else if (mode === 'rainbow') {
+            const hue = (rainbowHue + col * (360/cols) + row * 1.5) % 360;
+            const [rr,rg,rb] = hsvToRgb(hue, 0.8, 0.35 + bright * 0.65);
+            color = `rgb(${rr},${rg},${rb})`;
+          } else {
+            color = `rgb(${r},${g},${b})`;
+          }
+        }
+
+        const span = framePool[row * cols + col];
+        span.textContent = ch;
+        span.style.color  = color;
+        lastFrame[row * cols + col] = { ch, color };
+      }
+    }
+  }
+
+  requestAnimationFrame(render);
+}
+
+// ── Freeze ────────────────────────────────────────────────
+function toggleFreeze() {
+  frozen = !frozen;
+  const btn = document.getElementById('btn-freeze');
+  if (frozen) {
+    btn.classList.add('active');
+    btn.textContent = '▶ RESUME';
+  } else {
+    btn.textContent = '❚❚ FREEZE';
+    btn.classList.remove('active');
+    requestAnimationFrame(render);
+  }
+}
+
+// ── Export ────────────────────────────────────────────────
+function exportAs(type) {
+  if (type === 'txt') {
+    let txt = '';
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        txt += lastFrame[row * cols + col].ch;
+      }
+      txt += '\n';
+    }
+    download('ascii-frame.txt', txt, 'text/plain');
+  } else {
+    // Styled HTML — self-contained, opens in any browser
+    let spans = '';
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const { ch, color } = lastFrame[row * cols + col];
+        const safe = ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch === '&' ? '&amp;' : ch === '\\' ? '\\' : ch;
+        spans += `<span style="color:${color}">${safe}</span>`;
+      }
+      spans += '\n';
+    }
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ASCII Frame</title>
+<style>
+  body { background:#000; margin:0; padding:16px; }
+  pre  { font-family:'Courier New',monospace; font-weight:bold; font-size:11px; line-height:1; letter-spacing:0; white-space:pre; }
+</style></head>
+<body><pre>${spans}</pre></body></html>`;
+    download('ascii-frame.html', html, 'text/html');
+  }
+}
+
+function download(filename, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Camera ────────────────────────────────────────────────
+function startCamera() {
+  msgEl.classList.remove('blink', 'error');
+  msgEl.textContent = 'REQUESTING CAMERA ACCESS...';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showError(); return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, facingMode: 'user' }, audio: false })
+    .then(stream => {
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        video.play();
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('ui').style.display = 'flex';
+        resizeOutput();
+        running = true;
+        requestAnimationFrame(render);
+      };
+    })
+    .catch(err => {
+      if (err.name === 'NotAllowedError') {
+        msgEl.classList.add('error');
+        msgEl.innerHTML = '&#9888; Camera access denied. Click the camera icon in the address bar, allow it, then refresh.';
+      } else { showError(); }
+    });
+}
+
+function showError() {
+  msgEl.classList.add('error');
+  msgEl.innerHTML =
+    '&#9888; Chrome blocks camera on <code>file://</code> URLs.<br><br>' +
+    '<span style="color:#555;font-size:10px;line-height:2.2">' +
+    'Open Terminal and run:<br>' +
+    '<code>cd ~/Downloads</code><br>' +
+    '<code>python3 -m http.server 8080</code><br>' +
+    'Then visit: <code>http://localhost:8080/ascii-cam.html</code>' +
+    '</span>';
+}
+
+// ── Controls ──────────────────────────────────────────────
+document.getElementById('fps-slider').addEventListener('input', function() {
+  charFps = parseInt(this.value);
+  document.getElementById('fps-val').textContent = charFps + 'fps';
+});
+
+slider.addEventListener('input', () => {
+  resLevel = parseInt(slider.value);
+  if (running) resizeOutput();
+  else valEl.textContent = COLS_LEVELS[resLevel] + 'c';
+});
+
+window.addEventListener('resize', () => { if (running) resizeOutput(); });
+
+function setAspect(ratio, btn) {
+  forcedAspect = ratio;
+  document.querySelectorAll('[id^="asp-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (running) resizeOutput();
+}
+
+function setMode(m) {
+  mode = m;
+  ['color','bw','rainbow','edge'].forEach(id => {
+    document.getElementById('btn-' + id).classList.toggle('active', id === m);
+  });
+}
+</script>
+</body>
+</html>
