@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TXV — Text Vision Format</title>
+<meta name="description" content="TXV is an open plain-text format for animated character art with colour. The text-native equivalent of a GIF.">
+<meta property="og:title" content="TXV — Text Vision Format">
+<meta property="og:description" content="The plain-text GIF. Every frame is real ASCII characters with per-cell hex colour. Open in any editor.">
+<style>
+  :root {
+    --green:  #00ff41;
+    --green2: #00cc33;
+    --dim:    #1a4a1a;
+    --dimmer: #0d1a0d;
+    --dark:   #020d02;
+    --mid:    #2a5a2a;
+    --text:   #7aaa7a;
+    --muted:  #3a5a3a;
+    --bg:     #000;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', Courier, monospace;
+    overflow-x: hidden;
+    cursor: crosshair;
+  }
+
+  /* ── Scanlines ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 2px,
+      rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px;
+    height: 48px;
+    background: rgba(0,0,0,0.92);
+    border-bottom: 1px solid #0d1a0d;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+  }
+
+  .nav-logo {
+    font-size: 13px; font-weight: bold;
+    letter-spacing: 0.3em;
+    color: var(--green);
+    text-shadow: 0 0 12px var(--green);
+    text-decoration: none;
+  }
+
+  .nav-links {
+    display: flex; gap: 28px;
+    list-style: none;
+  }
+
+  .nav-links a {
+    font-size: 10px; letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .nav-links a:hover { color: var(--green); }
+
+  .nav-gh {
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--green) !important;
+    border: 1px solid var(--dim);
+    padding: 4px 12px;
+    border-radius: 2px;
+    transition: all 0.15s !important;
+  }
+  .nav-gh:hover {
+    background: rgba(0,255,65,0.07) !important;
+    border-color: var(--green) !important;
+  }
+
+  /* ── HERO ── */
+  #hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 80px 20px 60px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Radial glow behind hero */
+  #hero::before {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(0,255,65,0.04) 0%, transparent 70%);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  #hero-demo {
+    font-size: 7.5px;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: pre;
+    font-weight: bold;
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fadeIn 1s ease 0.3s forwards;
+    border: 1px solid #0d1a0d;
+    padding: 12px;
+    background: #010801;
+    border-radius: 2px;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  #hero-demo span { display: inline; }
+
+  .hero-label {
+    font-size: 9px; letter-spacing: 0.4em;
+    color: var(--muted); text-transform: uppercase;
+    margin-bottom: 16px;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 0.8s forwards;
+  }
+
+  h1 {
+    font-size: clamp(32px, 6vw, 64px);
+    letter-spacing: 0.15em;
+    color: var(--green);
+    text-shadow: 0 0 40px rgba(0,255,65,0.3);
+    text-align: center;
+    line-height: 1.1;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 1s forwards;
+  }
+
+  .hero-sub {
+    font-size: clamp(11px, 1.5vw, 14px);
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-align: center;
+    max-width: 520px;
+    line-height: 1.8;
+    margin-top: 20px;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 1.2s forwards;
+  }
+
+  .hero-sub em { color: var(--text); font-style: normal; }
+
+  .hero-ctas {
+    display: flex; gap: 12px; margin-top: 36px;
+    flex-wrap: wrap; justify-content: center;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 1.4s forwards;
+  }
+
+  .cta {
+    font-family: 'Courier New', monospace;
+    font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 12px 28px;
+    border-radius: 2px;
+    transition: all 0.2s;
+    cursor: pointer;
+    display: inline-block;
+  }
+
+  .cta-primary {
+    background: var(--green);
+    color: #000;
+    font-weight: bold;
+    box-shadow: 0 0 24px rgba(0,255,65,0.2);
+  }
+  .cta-primary:hover {
+    background: #fff;
+    box-shadow: 0 0 40px rgba(0,255,65,0.4);
+  }
+
+  .cta-secondary {
+    border: 1px solid var(--dim);
+    color: var(--text);
+  }
+  .cta-secondary:hover {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(0,255,65,0.04);
+  }
+
+  .scroll-hint {
+    position: absolute; bottom: 28px;
+    font-size: 9px; letter-spacing: 0.2em; color: var(--muted);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  /* ── SECTION BASE ── */
+  section {
+    padding: 100px 40px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .section-tag {
+    font-size: 9px; letter-spacing: 0.35em;
+    color: var(--muted); text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-tag::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: linear-gradient(to right, var(--dimmer), transparent);
+    max-width: 120px;
+  }
+
+  h2 {
+    font-size: clamp(20px, 3vw, 32px);
+    letter-spacing: 0.1em;
+    color: var(--green);
+    margin-bottom: 40px;
+    line-height: 1.2;
+  }
+
+  /* ── WHAT IS TXV ── */
+  #what {
+    border-top: 1px solid var(--dimmer);
+  }
+
+  .what-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+  }
+
+  @media (max-width: 680px) { .what-grid { grid-template-columns: 1fr; } }
+
+  .what-card {
+    background: var(--dark);
+    border: 1px solid var(--dimmer);
+    padding: 28px;
+    transition: border-color 0.2s;
+  }
+  .what-card:hover { border-color: var(--dim); }
+
+  .what-card-icon {
+    font-size: 20px; margin-bottom: 14px; display: block;
+    opacity: 0.7;
+  }
+  .what-card h3 {
+    font-size: 11px; letter-spacing: 0.2em;
+    color: var(--green); text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .what-card p {
+    font-size: 11px; line-height: 1.9; color: var(--muted);
+  }
+
+  /* ── FORMAT PREVIEW ── */
+  #format { border-top: 1px solid var(--dimmer); }
+
+  .format-block {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 700px) { .format-block { grid-template-columns: 1fr; } }
+
+  .format-desc {
+    font-size: 11px; line-height: 2; color: var(--muted);
+  }
+  .format-desc strong { color: var(--text); font-weight: normal; }
+
+  .format-rules {
+    list-style: none;
+    margin-top: 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .format-rules li {
+    font-size: 10px; line-height: 1.7;
+    color: var(--muted);
+    padding-left: 14px;
+    position: relative;
+  }
+  .format-rules li::before {
+    content: '·';
+    position: absolute; left: 0;
+    color: var(--green);
+  }
+
+  pre.code-block {
+    background: var(--dark);
+    border: 1px solid var(--dimmer);
+    padding: 24px;
+    font-size: 10.5px;
+    line-height: 1.7;
+    overflow-x: auto;
+    border-radius: 2px;
+    color: var(--text);
+  }
+
+  pre.code-block .key   { color: var(--green); }
+  pre.code-block .val   { color: #88cc88; }
+  pre.code-block .sep   { color: var(--dim); }
+  pre.code-block .chars { color: #4a8a4a; }
+  pre.code-block .col   { color: #ff8844; }
+
+  /* ── TOOLS ── */
+  #tools { border-top: 1px solid var(--dimmer); }
+
+  .tools-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+  }
+  @media (max-width: 600px) { .tools-grid { grid-template-columns: 1fr; } }
+
+  .tool-card {
+    background: var(--dark);
+    border: 1px solid var(--dimmer);
+    padding: 28px 28px 24px;
+    text-decoration: none;
+    display: block;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .tool-card::before {
+    content: '';
+    position: absolute; bottom: 0; left: 0;
+    height: 1px; width: 0%;
+    background: var(--green);
+    transition: width 0.3s ease;
+  }
+  .tool-card:hover { border-color: var(--dim); }
+  .tool-card:hover::before { width: 100%; }
+
+  .tool-name {
+    font-size: 11px; letter-spacing: 0.15em;
+    color: var(--green); text-transform: uppercase;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tool-name span {
+    font-size: 9px; color: var(--muted);
+    border: 1px solid var(--dimmer);
+    padding: 1px 6px; border-radius: 10px;
+    letter-spacing: 0.1em;
+  }
+  .tool-file {
+    font-size: 10px; color: var(--muted);
+    margin-bottom: 12px; letter-spacing: 0.05em;
+  }
+  .tool-desc {
+    font-size: 11px; line-height: 1.8; color: #3a5a3a;
+  }
+  .tool-dl {
+    margin-top: 16px;
+    font-size: 9px; letter-spacing: 0.15em;
+    color: var(--dim);
+    text-transform: uppercase;
+    transition: color 0.15s;
+  }
+  .tool-card:hover .tool-dl { color: var(--green); }
+
+  /* ── GET STARTED ── */
+  #start { border-top: 1px solid var(--dimmer); }
+
+  .start-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    margin-bottom: 48px;
+  }
+  @media (max-width: 700px) { .start-steps { grid-template-columns: 1fr; } }
+
+  .step {
+    background: var(--dark);
+    border: 1px solid var(--dimmer);
+    padding: 28px;
+  }
+  .step-num {
+    font-size: 28px; color: var(--dimmer);
+    margin-bottom: 12px; display: block;
+    font-weight: bold; letter-spacing: -0.02em;
+  }
+  .step h3 {
+    font-size: 10px; letter-spacing: 0.2em;
+    color: var(--text); text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .step p {
+    font-size: 10px; line-height: 1.9; color: var(--muted);
+  }
+  .step code {
+    display: block;
+    margin-top: 12px;
+    background: #010801;
+    border: 1px solid var(--dimmer);
+    padding: 10px 12px;
+    font-size: 10px;
+    color: var(--green);
+    line-height: 1.7;
+    border-radius: 2px;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--dimmer);
+    padding: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .footer-left { font-size: 10px; color: var(--muted); letter-spacing: 0.1em; line-height: 1.9; }
+  .footer-left a { color: var(--green); text-decoration: none; }
+  .footer-left a:hover { text-decoration: underline; }
+
+  .footer-right {
+    font-size: 9px; color: var(--muted);
+    letter-spacing: 0.1em; text-align: right;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50%       { opacity: 0.8; }
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* cursor blink on hero title */
+  h1::after {
+    content: '█';
+    font-size: 0.7em;
+    margin-left: 6px;
+    animation: blink 1s step-end infinite;
+    color: var(--green);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="#">TXV</a>
+  <ul class="nav-links">
+    <li><a href="#what">About</a></li>
+    <li><a href="#format">Format</a></li>
+    <li><a href="#tools">Tools</a></li>
+    <li><a href="#start">Get Started</a></li>
+    <li><a href="https://github.com/Alexander-321/TXV-Text-Vision-Format" target="_blank" class="nav-gh">GitHub ↗</a></li>
+  </ul>
+</nav>
+
+<!-- ── HERO ── -->
+<section id="hero">
+  <div id="hero-demo" aria-hidden="true"></div>
+  <p class="hero-label">Text Vision Format · v1.0 · Open Source</p>
+  <h1>TXV</h1>
+  <p class="hero-sub">
+    An open plain-text format for <em>animated character art with colour</em>.<br>
+    The text-native equivalent of a GIF — every frame is real ASCII characters.<br>
+    Open in any editor. Copy and paste. Author by hand.
+  </p>
+  <div class="hero-ctas">
+    <a class="cta cta-primary" href="#tools">Download Tools</a>
+    <a class="cta cta-secondary" href="https://github.com/Alexander-321/TXV-Text-Vision-Format/blob/main/TXV_SPEC.md" target="_blank">Read the Spec</a>
+  </div>
+  <p class="scroll-hint">↓ scroll</p>
+</section>
+
+<!-- ── WHAT IS TXV ── -->
+<section id="what">
+  <p class="section-tag reveal">What is TXV</p>
+  <h2 class="reveal">A format built for text.</h2>
+  <div class="what-grid">
+    <div class="what-card reveal">
+      <span class="what-card-icon">⬡</span>
+      <h3>Plain text, always</h3>
+      <p>A .txv file is valid UTF-8. Open it in Notepad, VS Code, or cat it in a terminal. Every frame is right there, readable, copy-pasteable, human-writable.</p>
+    </div>
+    <div class="what-card reveal">
+      <span class="what-card-icon">◈</span>
+      <h3>Colour-native</h3>
+      <p>Every character has a hex colour stored alongside it. Only non-black cells are stored — so dark frames are tiny. Full RGB, greyscale, or rainbow sweeps.</p>
+    </div>
+    <div class="what-card reveal">
+      <span class="what-card-icon">▤</span>
+      <h3>Animated by design</h3>
+      <p>Frames stack sequentially with a header-defined FPS. The format is the text-native GIF — made for loops, recordings, and live camera output.</p>
+    </div>
+    <div class="what-card reveal">
+      <span class="what-card-icon">⌘</span>
+      <h3>Open forever</h3>
+      <p>No binary blobs, no proprietary encoding. Released into the public domain. Anyone can implement a parser, build a tool, or extend the format.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── FORMAT PREVIEW ── -->
+<section id="format">
+  <p class="section-tag reveal">The Format</p>
+  <h2 class="reveal">Self-describing. Self-contained.</h2>
+  <div class="format-block">
+    <div>
+      <p class="format-desc reveal">
+        A <strong>.txv</strong> file starts with a header block, then one frame block per frame, each separated by <strong>---</strong>. That's the whole structure.
+      </p>
+      <ul class="format-rules reveal">
+        <li>Header declares size, fps, frame count, and colour mode</li>
+        <li>Each frame: exactly ROWS lines of COLS characters</li>
+        <li>Colours stored as <code style="font-size:10px;color:var(--green)">col,row,#rrggbb</code> — non-black cells only</li>
+        <li>Unknown header keys are silently ignored — forward compatible</li>
+        <li>If a line is shorter than COLS, remainder is treated as spaces</li>
+        <li>Full parser spec: <a href="https://github.com/Alexander-321/TXV-Text-Vision-Format/blob/main/TXV_SPEC.md" target="_blank" style="color:var(--green)">TXV_SPEC.md ↗</a></li>
+      </ul>
+    </div>
+    <pre class="code-block reveal"><span class="key">#txv</span> <span class="val">v1</span>
+<span class="key">#size</span> <span class="val">90x52</span>
+<span class="key">#fps</span> <span class="val">24</span>
+<span class="key">#frames</span> <span class="val">120</span>
+<span class="key">#mode</span> <span class="val">color</span>
+<span class="key">#author</span> <span class="val">ben</span>
+<span class="sep">---</span>
+<span class="key">#frame</span> <span class="val">1</span>
+<span class="chars">`.,--iil|/\oosa@W
+`,,--iil|/\oosa@W
+`.,--iil|/\##@@WM</span>
+<span class="key">#colors</span>
+<span class="col">0,0,#c43a1b
+1,0,#c43a1b
+7,0,#00ff41
+2,1,#ff8800</span>
+<span class="sep">---</span>
+<span class="key">#frame</span> <span class="val">2</span>
+<span class="chars">.,`--iil|/\oosa@W
+...</span>
+<span class="sep">---</span></pre>
+  </div>
+</section>
+
+<!-- ── TOOLS ── -->
+<section id="tools">
+  <p class="section-tag reveal">Reference Tools</p>
+  <h2 class="reveal">Four tools. Zero dependencies.</h2>
+  <p class="reveal" style="font-size:11px;color:var(--muted);margin-bottom:32px;line-height:1.9">All browser tools run entirely in your browser — nothing is uploaded, nothing leaves your machine.</p>
+  <div class="tools-grid">
+
+    <a class="tool-card reveal" href="https://raw.githubusercontent.com/Alexander-321/TXV-Text-Vision-Format/main/ascii-cam.html" download="ascii-cam.html">
+      <div class="tool-name">ASCII CAM <span>browser</span></div>
+      <div class="tool-file">ascii-cam.html</div>
+      <p class="tool-desc">Live webcam feed converted to character art in real time. Colour, B&W, Rainbow, Edge, and Glitch modes. Built-in .txv recorder with frame limit control.</p>
+      <div class="tool-dl">↓ download</div>
+    </a>
+
+    <a class="tool-card reveal" href="https://raw.githubusercontent.com/Alexander-321/TXV-Text-Vision-Format/main/txv-player.html" download="txv-player.html">
+      <div class="tool-name">TXV PLAYER <span>browser</span></div>
+      <div class="tool-file">txv-player.html</div>
+      <p class="tool-desc">Drag and drop any .txv file to play it back. Reverse, ping-pong, glitch effect, 5 colour theme overrides, frame scrubber, speed control, and frame export.</p>
+      <div class="tool-dl">↓ download</div>
+    </a>
+
+    <a class="tool-card reveal" href="https://raw.githubusercontent.com/Alexander-321/TXV-Text-Vision-Format/main/txv-converter.html" download="txv-converter.html">
+      <div class="tool-name">TXV CONVERTER <span>browser</span></div>
+      <div class="tool-file">txv-converter.html</div>
+      <p class="tool-desc">Convert MP4, MOV, or WEBM video files to .txv in the browser. Live preview while converting. Configurable columns, FPS, duration, contrast, and colour mode.</p>
+      <div class="tool-dl">↓ download</div>
+    </a>
+
+    <a class="tool-card reveal" href="https://raw.githubusercontent.com/Alexander-321/TXV-Text-Vision-Format/main/txv-convert.py" download="txv-convert.py">
+      <div class="tool-name">TXV CONVERT <span>python</span></div>
+      <div class="tool-file">txv-convert.py</div>
+      <p class="tool-desc">Command-line converter using OpenCV. Fast frame seeking, progress bar, full metadata support. Requires opencv-python and numpy. Supports any video format OpenCV handles.</p>
+      <div class="tool-dl">↓ download</div>
+    </a>
+
+  </div>
+</section>
+
+<!-- ── GET STARTED ── -->
+<section id="start">
+  <p class="section-tag reveal">Get Started</p>
+  <h2 class="reveal">Up in three steps.</h2>
+  <div class="start-steps">
+    <div class="step reveal">
+      <span class="step-num">01</span>
+      <h3>Download the tools</h3>
+      <p>Download all four files above and put them in the same folder.</p>
+      <code>ascii-cam.html<br>txv-player.html<br>txv-converter.html<br>txv-convert.py</code>
+    </div>
+    <div class="step reveal">
+      <span class="step-num">02</span>
+      <h3>Start a local server</h3>
+      <p>Chrome requires a local server for webcam access. Python's built-in server works perfectly.</p>
+      <code>cd ~/Downloads<br>python3 -m http.server 8080</code>
+    </div>
+    <div class="step reveal">
+      <span class="step-num">03</span>
+      <h3>Open in Chrome</h3>
+      <p>Navigate to localhost and open any tool. Allow camera access when prompted.</p>
+      <code>http://localhost:8080/<br>ascii-cam.html</code>
+    </div>
+  </div>
+
+  <div class="reveal" style="background:var(--dark);border:1px solid var(--dimmer);padding:28px;margin-top:2px">
+    <p style="font-size:9px;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;margin-bottom:14px">Python Converter</p>
+    <pre style="font-size:11px;color:var(--text);line-height:2;overflow-x:auto"><span style="color:var(--muted)"># install</span>
+pip install opencv-python numpy
+
+<span style="color:var(--muted)"># basic conversion</span>
+python3 txv-convert.py myvideo.mp4
+
+<span style="color:var(--muted)"># high resolution, 24fps, edge mode</span>
+python3 txv-convert.py clip.mp4 --cols 120 --fps 24 --mode edge
+
+<span style="color:var(--muted)"># with metadata</span>
+python3 txv-convert.py clip.mp4 --author yourname --note "first txv"</pre>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-left">
+    <strong style="color:var(--green);letter-spacing:0.2em">TXV</strong> — Text Vision Format v1.0<br>
+    Released into the public domain · <a href="https://github.com/Alexander-321/TXV-Text-Vision-Format/blob/main/TXV_SPEC.md" target="_blank">Read the spec</a> ·
+    <a href="https://github.com/Alexander-321/TXV-Text-Vision-Format" target="_blank">GitHub ↗</a>
+  </div>
+  <div class="footer-right">
+    Created March 2026<br>
+    <span style="color:var(--dimmer)">Do whatever you want with it.</span>
+  </div>
+</footer>
+
+<script>
+// ── Animated hero demo ─────────────────────────────────────
+// Generates a simple animated face/pattern to show TXV in action
+const CHARS = '`.,_-~^:;!|/\\()il1rtvz+=*?easyfhkpdb$gw#@WM&8';
+const W = 60, H = 22;
+const demoEl = document.getElementById('hero-demo');
+
+// Build a simple "radial pattern" that rotates
+function makeFrame(t) {
+  const cx = W/2, cy = H/2;
+  let out = '';
+  for (let r = 0; r < H; r++) {
+    for (let c = 0; c < W; c++) {
+      const dx = (c - cx) / (W/2);
+      const dy = (r - cy) / (H/2) * 1.8;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const angle = Math.atan2(dy, dx);
+      // Wave pattern
+      const wave = Math.sin(dist * 4 - t * 0.06) * 0.5 +
+                   Math.cos(angle * 3 + t * 0.04) * 0.3 +
+                   Math.sin(dist * 2 + angle + t * 0.05) * 0.2;
+      const bright = Math.max(0, Math.min(1, (wave + 1) / 2));
+      const idx = Math.round(bright * (CHARS.length - 1));
+      out += CHARS[idx];
+    }
+    out += '\n';
+  }
+  return out;
+}
+
+function hsvToRgb(h, s, v) {
+  const i = Math.floor(h/60)%6, f = h/60-Math.floor(h/60);
+  const p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s);
+  const m=[[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i];
+  return `rgb(${~~(m[0]*255)},${~~(m[1]*255)},${~~(m[2]*255)})`;
+}
+
+let tick = 0;
+let spans = null;
+
+function buildSpans() {
+  demoEl.innerHTML = '';
+  spans = [];
+  for (let r = 0; r < H; r++) {
+    for (let c = 0; c < W; c++) {
+      const sp = document.createElement('span');
+      demoEl.appendChild(sp);
+      spans.push(sp);
+    }
+    demoEl.appendChild(document.createTextNode('\n'));
+  }
+}
+
+function animateDemo() {
+  if (!spans) buildSpans();
+  const frame = makeFrame(tick);
+  const cx = W/2, cy = H/2;
+  for (let r = 0; r < H; r++) {
+    for (let c = 0; c < W; c++) {
+      const sp  = spans[r * W + c];
+      const ch  = frame[r * (W+1) + c];
+      const dx  = (c-cx)/(W/2), dy = (r-cy)/(H/2)*1.8;
+      const dist = Math.sqrt(dx*dx+dy*dy);
+      const hue = (tick * 0.5 + dist * 40 + Math.atan2(dy,dx)*30) % 360;
+      const bright = Math.max(0.1, 1 - dist * 0.5);
+      sp.textContent = ch;
+      sp.style.color = hsvToRgb(hue, 0.7, bright * 0.8);
+    }
+  }
+  tick++;
+  setTimeout(animateDemo, 50); // ~20fps
+}
+
+// Start after fonts loaded
+setTimeout(animateDemo, 400);
+
+// ── Scroll reveal ──────────────────────────────────────────
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
